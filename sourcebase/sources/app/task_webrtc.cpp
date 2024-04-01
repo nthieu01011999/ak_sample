@@ -28,7 +28,9 @@
 #include "app.h"
 #include "app_dbg.h"
 #include "task_list.h"
+#include "rtc/rtc.hpp"
 
+using namespace rtc;
 using namespace std;
 
 q_msg_t gw_task_webrtc_mailbox;
@@ -38,8 +40,13 @@ void *gw_task_webrtc_entry(void *) {
 
 	wait_all_tasks_started();
 
-
 	APP_DBG("[STARTED] gw_task_webrtc_entry\n");
+
+	Configuration config;
+	string stunServer = "stun:42.116.138.35:3478";
+	cout << "STUN server is " << stunServer << endl;
+	config.iceServers.emplace_back(stunServer);
+	config.disableAutoNegotiation = true;
 
 	while (1) {
 		/* get messge */

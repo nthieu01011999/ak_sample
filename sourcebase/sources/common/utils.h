@@ -41,9 +41,5 @@ extern char *safe_strcpy(char *dest, const char *src, size_t dest_size);
 extern string getFileName(const string &s);
 extern bool appendStringToFile(const char *path, const string str);
 
-template<class T>
-std::weak_ptr<T> make_weak_ptr(std::shared_ptr<T> ptr) {
-	return ptr;
-}
 
 #endif	  //__UTILS__
