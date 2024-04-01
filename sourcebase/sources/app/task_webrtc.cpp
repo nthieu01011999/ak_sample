@@ -32,6 +32,12 @@
 
 using namespace rtc;
 using namespace std;
+using namespace chrono_literals;
+using namespace chrono;
+
+using json = nlohmann::json;
+
+static rtcServersConfig_t rtcServerCfg;
 
 q_msg_t gw_task_webrtc_mailbox;
 
@@ -43,10 +49,16 @@ void *gw_task_webrtc_entry(void *) {
 	APP_DBG("[STARTED] gw_task_webrtc_entry\n");
 
 	Configuration config;
-	string stunServer = "stun:42.116.138.35:3478";
-	cout << "STUN server is " << stunServer << endl;
-	config.iceServers.emplace_back(stunServer);
-	config.disableAutoNegotiation = true;
+	mtce_configGetRtcServers(&rtcServerCfg);
+	APP_PRINT("STUN server is: %s\n", rtcServerCfg.stunServerCfg.c_str());
+	APP_PRINT("TURN server is: %s\n", rtcServerCfg.turnServerCfg.c_str());
+	if (rtcServerCfg.stunServerCfg != "") {
+		config.iceServers.emplace_back(rtcServerCfg.stunServerCfg);
+	}
+	if (rtcServerCfg.turnServerCfg != "") {
+		config.iceServers.emplace_back(rtcServerCfg.turnServerCfg);
+	}
+	config.disableAutoNegotiation = false;	  // NOTE call setLocalDescription auto
 
 	while (1) {
 		/* get messge */
