@@ -12,3 +12,4 @@ OBJ += $(OBJ_DIR)/dispatchqueue.o
 # OBJ += $(OBJ_DIR)/playback.o
 OBJ += $(OBJ_DIR)/fileparser.o
 OBJ += $(OBJ_DIR)/UsrDataChannelHdl.o
+OBJ += $(OBJ_DIR)/opusfileparser.o
