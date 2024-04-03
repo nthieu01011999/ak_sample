@@ -80,42 +80,7 @@ private:
 #define MESSAGE_TYPE_SIGNALING		"Signaling"
 #define MESSAGE_TYPE_RECORD			"RecordSetting"
 
-extern int mtce_configGetSerial(char *serial);
-extern int mtce_configGetDeviceInfoStr(json &devInfoJs);
-
-extern int mtce_configSetMQTT(mtce_netMQTT_t *mqttCfg);
-extern int mtce_configGetMQTT(mtce_netMQTT_t *mqttCfg);
 
 extern int mtce_configGetRtcServers(rtcServersConfig_t *rtcServerCfg);
-
-extern int mtce_configSetMotion(mtce_motionSetting_t *motionCfg);
-extern int mtce_configGetMotion(mtce_motionSetting_t *motionCfg);
-
-extern int mtce_configSetEncode(mtce_encode_t *encodeCfg);
-extern int mtce_configGetEncode(mtce_encode_t *encodeCfg);
-
-extern int mtce_configSetParam(mtce_cameraParam_t *paramCfg);
-extern int mtce_configGetParam(mtce_cameraParam_t *paramCfg);
-
-extern int mtce_configSetWifi(mtce_netWifi_t *wifiCfg);
-extern int mtce_configGetWifi(mtce_netWifi_t *wifiCfg);
-
-extern int mtce_configSetRTMP(mtce_rtmp_t *rtmpCfg);
-extern int mtce_configGetRTMP(mtce_rtmp_t *rtmpCfg);
-
-extern int mtce_configSetWatermark(mtce_watermark_t *watermarkCfg);
-extern int mtce_configGetWatermark(mtce_watermark_t *watermarkCfg);
-
-extern int mtce_configSetStorage(mtce_storage_t *storageCfg);
-extern int mtce_configGetStorage(mtce_storage_t *storageCfg);
-
-extern int mtce_configSetS3(mtce_s3_t *s3Cfg);
-extern int mtce_configGetS3(mtce_s3_t *s3Cfg);
-
-extern int mtce_configSetAccount(mtce_account_t *accountCfg);
-extern int mtce_configGetAccount(mtce_account_t *accountCfg);
-
-extern int mtce_configSetRecord(mtce_record_t *recordCfg);
-extern int mtce_configGetRecord(mtce_record_t *recordCfg);
 
 #endif	  //__APP_CONFIG_H__
