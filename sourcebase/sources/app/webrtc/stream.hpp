@@ -10,54 +10,68 @@
 #ifndef stream_hpp
 #define stream_hpp
 
+#include <pthread.h>
+
 #include "dispatchqueue.hpp"
 #include "rtc/rtc.hpp"
-// #include "SDCard.h"
 
 class StreamSource {
 protected:
+	rtc::binary sample;
 
 public:
-    virtual void start() = 0;
-    virtual void stop() = 0;
-    virtual void loadNextSample() = 0;
-
-    virtual uint64_t getSampleTime_us() = 0;
-    virtual uint64_t getSampleDuration_us() = 0;
-	virtual rtc::binary getSample() = 0;
+	virtual void start()							 = 0;
+	virtual void stop()								 = 0;
+	virtual void loadNextSample()					 = 0;
+	virtual void loadNextSample(uint8_t *, uint32_t) = 0;
+	virtual uint64_t getSampleTime_us()				 = 0;
+	virtual uint64_t getSampleDuration_us()			 = 0;
+	virtual rtc::binary getSample()					 = 0;
+	void rstSample() {
+		sample.clear();
+	}
 };
 
-class Stream: public std::enable_shared_from_this<Stream> {
-    uint64_t startTime = 0;
-    std::mutex mutex;
-    DispatchQueue dispatchQueue = DispatchQueue("StreamQueue");
-
-    bool _isRunning = false;
+class Stream : public std::enable_shared_from_this<Stream> {
 public:
-    const std::shared_ptr<StreamSource> audio;
-    const std::shared_ptr<StreamSource> video;
+	enum class StreamSourceType {
+		Audio,
+		Video
+	};
 
-    Stream(std::shared_ptr<StreamSource> video, std::shared_ptr<StreamSource> audio);
-    ~Stream();
+	Stream(std::shared_ptr<StreamSource> video, std::shared_ptr<StreamSource> audio);
+	~Stream();
+	void onSample(std::function<void(StreamSourceType, uint64_t)> handler);
+	void startLive();
+	void stopLive();
+	void startPbSession();
+	void stopPbSession();
 
-    enum class StreamSourceType {
-        Audio,
-        Video
-    };
+	static void syncLiveWaitTime(std::shared_ptr<Stream> AVStream);
+	static void LiveVideo(bool isFullHD, uint8_t *, uint32_t);
+	static void LiveAudio(uint8_t *, uint32_t);
 
 private:
-    rtc::synchronized_callback<StreamSourceType, uint64_t, rtc::binary> sampleHandler;
+	std::mutex mutex;
+	DispatchQueue dispatchQueue = DispatchQueue("StreamQueue");
+	bool _isRunning				= false;
+	bool mIsPbRunning			= false;
+	rtc::synchronized_callback<StreamSourceType, uint64_t> sampleHandler;
 
-    std::pair<std::shared_ptr<StreamSource>, StreamSourceType> unsafePrepareForSample();
-
-    void sendSample();
+	std::pair<std::shared_ptr<StreamSource>, StreamSourceType> unsafePrepareForSample();
+	void sendSample();
 
 public:
-    void onSample(std::function<void (StreamSourceType, uint64_t, rtc::binary)> handler);
-    void start();
-    void stop();
-    const bool & isRunning = _isRunning;
-};
+	const bool &isRunning = _isRunning;
+	std::shared_ptr<StreamSource> audio;
+	std::shared_ptr<StreamSource> video;
 
+	std::shared_ptr<StreamSource> audioPb;
+	std::shared_ptr<StreamSource> videoPb;
+
+	uint64_t startLiveTime = 0;
+	uint64_t startPbTime   = 0;
+	static pthread_mutex_t pubLicStreamMutex;
+};
 
 #endif /* stream_hpp */

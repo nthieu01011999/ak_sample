@@ -30,8 +30,9 @@
 #include "task_list.h"
 #include "task_webrtc.h"
 #include "rtc/rtc.hpp"
-#include "h264fileparser.hpp"
-#include "opusfileparser.hpp"
+#include "h26xsource.hpp"
+#include "audiosource.hpp"
+
 
 using namespace rtc;
 using namespace std;
@@ -40,8 +41,10 @@ using namespace chrono;
 
 using json = nlohmann::json;
 
-static rtcServersConfig_t rtcServerCfg;
 
+mutex clientsMutex;
+ClientsGroup_t clients;
+static rtcServersConfig_t rtcServerCfg;
 /// Audio and video stream
 std::optional<std::shared_ptr<Stream>> avStream = std::nullopt;
 
@@ -123,10 +126,10 @@ void *gw_task_webrtc_entry(void *) {
 
 /// Create stream
 shared_ptr<Stream> createStream(const string h264Samples, const unsigned fps, const string opusSamples) {
-    auto video = make_shared<H264FileParser>(h264Samples, fps, true); 
-    auto audio = make_shared<OPUSFileParser>(opusSamples, true);
+	auto video = make_shared<H26XSource>(VIDEO_FPS);
+	auto audio = make_shared<AudioSource>(AUDIO_SPS);
 
-    auto stream = make_shared<Stream>(video, audio);
+	auto stream = make_shared<Stream>(video, audio);
    
 }
 
@@ -142,7 +145,7 @@ void startStream() {
         stream = createStream(h264SamplesDirectory, USER_FPS, opusSamplesDirectory);
         avStream = stream;
     }
-    stream->start(); //thread run or not, not start();
+    // stream->start(); //thread run or not, not start();
 }
 
 
@@ -168,84 +171,85 @@ void addToStream(shared_ptr<Client> client, bool isAddingVideo) {
 }
 
 
+shared_ptr<ClientTrackData> addVideo(const shared_ptr<PeerConnection> pc, const uint8_t payloadType, const uint32_t ssrc, const string cname, const string msid,
+									 const function<void(void)> onOpen) {
+	auto video = Description::Video(cname, Description::Direction::SendOnly);
+	video.addH264Codec(payloadType);
+	video.addSSRC(ssrc, cname, msid, cname);
+	auto track = pc->addTrack(video);
+	// create RTP configuration
+	auto rtpConfig = make_shared<RtpPacketizationConfig>(ssrc, cname, payloadType, H264RtpPacketizer::defaultClockRate);
+	// create packetizer
+	auto packetizer = make_shared<H264RtpPacketizer>(NalUnit::Separator::Length, rtpConfig);
+	// add RTCP SR handler
+	auto srReporter = make_shared<RtcpSrReporter>(rtpConfig);
+	packetizer->addToChain(srReporter);
+	// add RTCP NACK handler
+	auto nackResponder = make_shared<RtcpNackResponder>();
+	packetizer->addToChain(nackResponder);
+	// set handler
+	track->setMediaHandler(packetizer);
+	track->onOpen(onOpen);
+	auto trackData = make_shared<ClientTrackData>(track, srReporter);
+	return trackData;
+}
 
-shared_ptr<ClientTrackData> addVideo(const shared_ptr<PeerConnection> pc, 
-                                     const uint8_t payloadType, 
-                                     const uint32_t ssrc, 
-                                     const string cname, 
-                                     const string msid, 
-                                     const function<void (void)> onOpen)
-    {
-    auto video = Description::Video(cname);
-    video.addH264Codec(payloadType);
-    video.addSSRC(ssrc, cname, msid, cname);
-    auto track = pc->addTrack(video);
-    // create RTP configuration
-    auto rtpConfig = make_shared<RtpPacketizationConfig>(ssrc, cname, payloadType, H264RtpPacketizer::defaultClockRate);
-    // create packetizer
-    auto packetizer = make_shared<H264RtpPacketizer>(NalUnit::Separator::Length, rtpConfig);
-    // add RTCP SR handler
-    auto srReporter = make_shared<RtcpSrReporter>(rtpConfig);
-    packetizer->addToChain(srReporter);
-    // add RTCP NACK handler
-    auto nackResponder = make_shared<RtcpNackResponder>();
-    packetizer->addToChain(nackResponder);
-    // set handler
-    track->setMediaHandler(packetizer);
-    track->onOpen(onOpen);
-    auto trackData = make_shared<ClientTrackData>(track, srReporter);
-    return trackData;
+static vector<char> userAudioBuffer;
+
+shared_ptr<ClientTrackData> addAudio(const shared_ptr<PeerConnection> pc, const uint8_t payloadType, const uint32_t ssrc, const string cname, const string msid,
+									 const function<void(void)> onOpen) {
+	auto audio = Description::Audio(cname, Description::Direction::SendRecv);
+	audio.addPCMACodec(payloadType);
+	audio.addSSRC(ssrc, cname, msid, cname);
+	auto track = pc->addTrack(audio);
+	// create RTP configuration
+	auto rtpConfig = make_shared<RtpPacketizationConfig>(ssrc, cname, payloadType, OpusRtpPacketizer::DefaultClockRate);
+	// create packetizer
+	auto packetizer = make_shared<OpusRtpPacketizer>(rtpConfig);
+	// add RTCP SR handler
+	auto srReporter = make_shared<RtcpSrReporter>(rtpConfig);
+	packetizer->addToChain(srReporter);
+	// add RTCP NACK handler
+	auto nackResponder = make_shared<RtcpNackResponder>();
+	packetizer->addToChain(nackResponder);
+	// set handler
+	track->setMediaHandler(packetizer);
+
+	track->onMessage(
+		// [](rtc::binary message) {
+		// 	/* This is an RTP packet */
+		// 	auto rtpHdr		  = reinterpret_cast<rtc::RtpHeader *>(message.data());
+		// 	char *rtpBody	  = rtpHdr->getBody();
+		// 	size_t bodyLength = message.size() - rtpHdr->getSize();
+		// 	userAudioBuffer.insert(userAudioBuffer.end(), rtpBody, rtpBody + bodyLength);
+		// 	if (userAudioBuffer.size() > 1024) {
+		// 		int sent = mtce_sendAudioDecode(userAudioBuffer.data(), userAudioBuffer.size());
+		// 		if (sent) {
+		// 			// APP_DBG("Sent audio to decoder with size: %d\n", sent);
+		// 			userAudioBuffer.erase(userAudioBuffer.begin(), userAudioBuffer.begin() + sent);
+		// 		}
+		// 	}
+		// },
+		nullptr);
+	track->onOpen(onOpen);
+	auto trackData = make_shared<ClientTrackData>(track, srReporter);
+	return trackData;
 }
 
 
-shared_ptr<ClientTrackData> addAudio(const shared_ptr<PeerConnection> pc, 
-                                     const uint8_t payloadType, 
-                                     const uint32_t ssrc, 
-                                     const string cname, 
-                                     const string msid, 
-                                     const function<void (void)> onOpen)
-{
-    auto audio = Description::Audio(cname);
-    // audio.addOpusCodec(payloadType);
-    audio.addPCMACodec(payloadType);
-    // audio.addPCMUCodec(payloadType);
-    audio.addSSRC(ssrc, cname, msid, cname);
-    auto track = pc->addTrack(audio);
-    // create RTP configuration
-    auto rtpConfig = make_shared<RtpPacketizationConfig>(ssrc, cname, payloadType, OpusRtpPacketizer::DefaultClockRate);
-    // create packetizer
-    auto packetizer = make_shared<OpusRtpPacketizer>(rtpConfig);
-    // add RTCP SR handler
-    auto srReporter = make_shared<RtcpSrReporter>(rtpConfig);
-    packetizer->addToChain(srReporter);
-    // add RTCP NACK handler
-    auto nackResponder = make_shared<RtcpNackResponder>();
-    packetizer->addToChain(nackResponder);
-    // set handler
-    track->setMediaHandler(packetizer);
-    track->onOpen(onOpen);
-    auto trackData = make_shared<ClientTrackData>(track, srReporter);
-    return trackData;
-}
+ void sendInitialNalus(shared_ptr<Stream> stream, shared_ptr<ClientTrackData> video) {
+	auto h264		  = dynamic_cast<H26XSource *>(stream->video.get());
+	auto initialNalus = h264->initialNALUS();
 
+	/* Send previous NALU key frame so users don't have to wait to see stream works */
+	if (!initialNalus.empty()) {
+		const double frameDuration_s		  = double(h264->getSampleDuration_us()) / (1000 * 1000);
+		const uint32_t frameTimestampDuration = video->sender->rtpConfig->secondsToTimestamp(frameDuration_s);
+		video->sender->rtpConfig->timestamp	  = video->sender->rtpConfig->startTimestamp - frameTimestampDuration * 2;
+		video->track->send(initialNalus);
+		video->sender->rtpConfig->timestamp += frameTimestampDuration;
 
-void sendInitialNalus(shared_ptr<Stream> stream, shared_ptr<ClientTrackData> video) {
-    auto h264 = dynamic_cast<H264FileParser *>(stream->video.get());
-    auto initialNalus = h264->initialNALUS();
-
-    // send previous NALU key frame so users don't have to wait to see stream works
-    if (!initialNalus.empty()) {
-        APP_PRINT("-> !initialNalus.empty()\n");
-
-        const double frameDuration_s = double(h264->getSampleDuration_us()) / (1000 * 1000);
-        const uint32_t frameTimestampDuration = video->sender->rtpConfig->secondsToTimestamp(frameDuration_s);
-        video->sender->rtpConfig->timestamp = video->sender->rtpConfig->startTimestamp - frameTimestampDuration * 2;
-        video->track->send(initialNalus);
-        video->sender->rtpConfig->timestamp += frameTimestampDuration;
-        // Send initial NAL units again to start stream in firefox browser
-        video->track->send(initialNalus);
-    }
-    else {
-        APP_PRINT("-> initialNalus.empty()\n");
-    }
+		/* Send initial NAL units again to start stream in firefox browser */
+		video->track->send(initialNalus);
+	}
 }

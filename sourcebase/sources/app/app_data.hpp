@@ -42,7 +42,7 @@ typedef struct {
 
 extern bool checkFileExist(const char *url);
 extern std::string mtce_getSerial();
-
+extern mutex clientsMutex;
 /******************************************************************************
  * task shell define
  *******************************************************************************/

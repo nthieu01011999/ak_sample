@@ -8,72 +8,178 @@
  */
 
 #include "helpers.hpp"
+#include "utils.h"
 
 #include <ctime>
-
-#ifdef _MSC_VER
-// taken from https://stackoverflow.com/questions/10905892/equivalent-of-gettimeday-for-windows
-#include <windows.h>
-#include <winsock2.h> // for struct timeval
-
-struct timezone {
-	int tz_minuteswest;
-	int tz_dsttime;
-};
-
-int gettimeofday(struct timeval *tv, struct timezone *tz) {
-	if (tv) {
-		FILETIME filetime; /* 64-bit value representing the number of 100-nanosecond intervals since
-		                      January 1, 1601 00:00 UTC */
-		ULARGE_INTEGER x;
-		ULONGLONG usec;
-		static const ULONGLONG epoch_offset_us =
-		    11644473600000000ULL; /* microseconds betweeen Jan 1,1601 and Jan 1,1970 */
-
-#if _WIN32_WINNT >= _WIN32_WINNT_WIN8
-		GetSystemTimePreciseAsFileTime(&filetime);
-#else
-		GetSystemTimeAsFileTime(&filetime);
-#endif
-		x.LowPart = filetime.dwLowDateTime;
-		x.HighPart = filetime.dwHighDateTime;
-		usec = x.QuadPart / 10 - epoch_offset_us;
-		tv->tv_sec = time_t(usec / 1000000ULL);
-		tv->tv_usec = long(usec % 1000000ULL);
-	}
-	if (tz) {
-		TIME_ZONE_INFORMATION timezone;
-		GetTimeZoneInformation(&timezone);
-		tz->tz_minuteswest = timezone.Bias;
-		tz->tz_dsttime = 0;
-	}
-	return 0;
-}
-#else
+#include <arpa/inet.h>
 #include <sys/time.h>
-#endif
+#include <chrono>
 
-using namespace std;
+#include "app.h"
+#include "app_data.hpp"
+#include "task_list.h"
+
+#include <chrono>
+
+#include "app.h"
+#include "app_data.hpp"
+#include "task_list.h"
+
 using namespace rtc;
-
-ClientTrackData::ClientTrackData(shared_ptr<Track> track, shared_ptr<RtcpSrReporter> sender) {
-	this->track = track;
-	this->sender = sender;
-}
+using namespace std::chrono;
 
 void Client::setState(State state) {
-	std::unique_lock lock(_mutex);
+	std::unique_lock lock(_shrMutex);
 	this->state = state;
 }
 
 Client::State Client::getState() {
-	std::shared_lock lock(_mutex);
+	std::shared_lock lock(_shrMutex);
 	return state;
 }
 
-ClientTrack::ClientTrack(string id, shared_ptr<ClientTrackData> trackData) {
-	this->id = id;
-	this->trackData = trackData;
+bool Client::getDownloadFlag() {
+	std::shared_lock lock(_shrMutex);
+	return downloadFlag;
+}
+
+void Client::setDownloadFlag(bool newDownloadFlag) {
+	std::unique_lock lock(_shrMutex);
+	downloadFlag = newDownloadFlag;
+}
+
+fileDownloadInfo_t Client::getCurrentFileTransfer() {
+	return currentFileTransfer;
+}
+
+void Client::setCurrentFileTransfer(const fileDownloadInfo_t &newCurrentFileTransfer) {
+	currentFileTransfer = newCurrentFileTransfer;
+}
+
+uint32_t Client::getCursorFile() {
+	return cursorFile;
+}
+
+void Client::setCursorFile(uint32_t newCursorFile) {
+	cursorFile = newCursorFile;
+}
+
+void Client::startTimeoutDownload() {
+	string id = getId();
+	removeTimeoutDownload();
+	setTimerDownloadId(systemTimer.add(milliseconds(GW_WEBRTC_WAIT_REQUEST_TIMEOUT_INTERVAL), [id](CppTime::timer_id) {
+		task_post_dynamic_msg(GW_TASK_WEBRTC_ID, GW_WEBRTC_DATACHANNEL_DOWNLOAD_RELEASE_REQ, (uint8_t *)id.c_str(), id.length() + 1);
+	}));
+}
+
+void Client::removeTimeoutDownload() {
+	systemTimer.remove(getTimerDownloadId());
+}
+
+void Client::startTimeoutConnect() {
+	string id = getId();
+	removeTimeoutConnect();
+	setTimerConnectId(systemTimer.add(milliseconds(GW_WEBRTC_ERASE_CLIENT_NO_ANSWER_TIMEOUT_INTERVAL), [id](CppTime::timer_id) {
+		task_post_dynamic_msg(GW_TASK_WEBRTC_ID, GW_WEBRTC_CHECK_CLIENT_CONNECTED_REQ, (uint8_t *)id.c_str(), id.length() + 1);
+	}));
+}
+
+void Client::removeTimeoutConnect() {
+	systemTimer.remove(getTimerConnectId());
+}
+
+size_t Client::getTimerConnectId() {
+	std::shared_lock lock(_shrMutex);
+	return timerConnectId;
+}
+
+void Client::setTimerConnectId(size_t newTimerConnectId) {
+	std::unique_lock lock(_shrMutex);
+	timerConnectId = newTimerConnectId;
+}
+
+size_t Client::getTimerDownloadId() {
+	return timerDownloadId;
+}
+
+void Client::setTimerDownloadId(size_t newTimerDownloadId) {
+	timerDownloadId = newTimerDownloadId;
+}
+
+void Client::openPbChannel() {
+	std::unique_lock lock(_shrMutex);
+
+	auto video = make_shared<H26XSourceSD>(13);
+	auto audio = make_shared<AudioSourceSD>(13);
+	avPb	   = make_shared<PlayBack>(video, audio);
+}
+
+void Client::closePbChannel() {
+	std::unique_lock lock(_shrMutex);
+
+	if (avPb.use_count() != 0) {
+		avPb.reset();
+	}
+}
+
+bool Client::isPbChannelOpening() {
+	std::shared_lock lock(_shrMutex);
+	return ((avPb.use_count() != 0) && (mOptions == Client::eOptions::Playback));
+}
+
+void Client::setStreamOption(eOptions opt) {
+	std::unique_lock lock(_shrMutex);
+
+	mOptions = opt;
+}
+
+Client::eOptions Client::getStreamOption() {
+	std::shared_lock lock(_shrMutex);
+
+	return mOptions;
+}
+
+void Client::setResolution(eLiveResolution res) {
+	std::unique_lock lock(_shrMutex);
+
+	mLiveResolution = res;
+}
+
+Client::eLiveResolution Client::getResolution() {
+	std::shared_lock lock(_shrMutex);
+
+	return mLiveResolution;
+}
+
+PlayBack::ePbStatus Client::getPbState() {
+	if (isPbChannelOpening()) {
+		return avPb->getPbState();
+	}
+
+	return PlayBack::ePbStatus::Stopped;
+}
+
+string Client::getId() {
+	return id;
+}
+
+void Client::setId(const string &newId) {
+	id = newId;
+}
+
+bool Client::getSdpExist() const {
+	return sdpExist;
+}
+
+void Client::setSdpExist(bool newSdpExist) {
+	sdpExist = newSdpExist;
+}
+
+void Client::clMutexLock() {
+	_mutex.lock();
+}
+void Client::clMutexUnlock() {
+	_mutex.unlock();
 }
 
 uint64_t currentTimeInMicroSeconds() {
