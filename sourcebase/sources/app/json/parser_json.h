@@ -11,7 +11,9 @@ extern bool mtce_jsonAlarmUploadFile(json &json_in, json &json_data);
 extern bool mtce_jsonSetNetMQTT(json &json_in, mtce_netMQTT_t *mqtt);
 extern bool mtce_jsonGetNetMQTT(json &json_in, mtce_netMQTT_t *param);
 
-extern bool mtce_jsonGetRtcServers(json &json_in, rtcServersConfig_t *rtcSvCfg);
+// extern bool mtce_jsonGetRtcServers(json &json_in, rtcServersConfig_t *rtcSvCfg);
+
+extern bool mtce_jsonGetRtcServers(const json &json_in, rtcServersConfig_t *rtcSvCfg);
 
 extern bool mtce_jsonSetMotion(json &json_in, mtce_motionSetting_t *param);
 extern bool mtce_jsonGetMotion(json &json_in, mtce_motionSetting_t *param);

@@ -64,23 +64,44 @@ static shared_ptr<ClientTrackData> addVideo(const shared_ptr<PeerConnection> pc,
 static shared_ptr<ClientTrackData> addAudio(const shared_ptr<PeerConnection> pc, const uint8_t payloadType, const uint32_t ssrc, const string cname, const string msid,
                                             const function<void(void)> onOpen);
 void sendInitialNalus(std::shared_ptr<Stream> stream, std::shared_ptr<ClientTrackData> video);									
-#ifdef BUILD_ARM_RTS
-#endif
+
 
 q_msg_t gw_task_webrtc_mailbox;
+
+
+
+
+
+
+
+
+
+
+
+
 
 void *gw_task_webrtc_entry(void *) {
 	ak_msg_t *msg = AK_MSG_NULL;
 
 	wait_all_tasks_started();
 
-	APP_DBG("[STARTED] gw_task_webrtc_entry\n");
 
 	//Configure Network Settings, Including STUN/TURN Servers for WebRTC Connections
 	Configuration config;
-	string stunServer = "stun:42.116.138.35:3478";
-	cout << "STUN server is " << stunServer << endl;
-	config.iceServers.emplace_back(stunServer);
+	mtce_configGetRtcServers(&rtcServerCfg);
+	APP_PRINT("STUN server is: %s\n", rtcServerCfg.stunServerCfg.c_str());
+	APP_PRINT("TURN server is: %s\n", rtcServerCfg.turnServerCfg.c_str());
+	if (rtcServerCfg.stunServerCfg != "") {
+		config.iceServers.emplace_back(rtcServerCfg.stunServerCfg);
+	}
+	if (rtcServerCfg.turnServerCfg != "") {
+		config.iceServers.emplace_back(rtcServerCfg.turnServerCfg);
+	}
+	config.disableAutoNegotiation = false;	  // NOTE call setLocalDescription auto
+
+ 
+
+	APP_DBG("[STARTED] gw_task_webrtc_entry\n");
 
 
 	while (1) {
@@ -124,9 +145,7 @@ void startStream() {
     stream->start(); //thread run or not, not start();
 }
 
-/// Add client to stream
-/// @param client Client
-/// @param adding_video True if adding video
+
 void addToStream(shared_ptr<Client> client, bool isAddingVideo) {
     if (client->getState() == Client::State::Waiting) {
         client->setState(isAddingVideo ? Client::State::WaitingForAudio : Client::State::WaitingForVideo);
@@ -209,33 +228,7 @@ shared_ptr<ClientTrackData> addAudio(const shared_ptr<PeerConnection> pc,
     return trackData;
 }
 
-// shared_ptr<ClientTrackData> addVideo_(const shared_ptr<PeerConnection> pc, const uint8_t payloadType, const uint32_t ssrc, const string cname, const string msid,
-// 									 const function<void(void)> onOpen) {
-// 	auto video = Description::Video(cname, Description::Direction::SendOnly);
-// 	video.addH264Codec(payloadType);
-// 	video.addSSRC(ssrc, cname, msid, cname);
-// 	auto track = pc->addTrack(video);
-// 	// create RTP configuration
-// 	auto rtpConfig = make_shared<RtpPacketizationConfig>(ssrc, cname, payloadType, H264RtpPacketizer::defaultClockRate);
-// 	// create packetizer
-// 	auto packetizer = make_shared<H264RtpPacketizer>(NalUnit::Separator::Length, rtpConfig);
-// 	// add RTCP SR handler
-// 	auto srReporter = make_shared<RtcpSrReporter>(rtpConfig);
-// 	packetizer->addToChain(srReporter);
-// 	// add RTCP NACK handler
-// 	auto nackResponder = make_shared<RtcpNackResponder>();
-// 	packetizer->addToChain(nackResponder);
-// 	// set handler
-// 	track->setMediaHandler(packetizer);
-// 	track->onOpen(onOpen);
-// 	auto trackData = make_shared<ClientTrackData>(track, srReporter);
-// 	return trackData;
-// }
 
-
-/// Send previous key frame so browser can show something to user
-/// @param stream Stream
-/// @param video Video track data
 void sendInitialNalus(shared_ptr<Stream> stream, shared_ptr<ClientTrackData> video) {
     auto h264 = dynamic_cast<H264FileParser *>(stream->video.get());
     auto initialNalus = h264->initialNALUS();
