@@ -260,7 +260,8 @@ enum {
 #define MTCE_DEVICE_INFO_PATH "/app/init/version"
 
 #define MTCE_USER_CONF_PATH	 "/usr/conf"	 // TODO change
-#define MTCE_DFAUL_CONF_PATH "/app/default"
+// #define MTCE_DFAUL_CONF_PATH "/app/default"
+#define MTCE_DFAUL_CONF_PATH "/app"
 
 #define MTCE_MEDIA_VIDEO_PATH "/media/video"
 #define MTCE_MEDIA_AUDIO_PATH "/media/audio"

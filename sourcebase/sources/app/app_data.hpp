@@ -76,13 +76,6 @@ typedef struct {
 	}
 } rtcServersConfig_t;
 
-// extern SDCard SDRecords;
-// extern mutex clientsMutex;
-// extern ClientsGroup_t clients;
-// extern DispatchQueue rtcThread;
-// extern optional<shared_ptr<Stream>> avStream;
 
-// extern string getFileName(const string &s);
-// extern void sendMsgControlDatachannel(const string &id, const string &msg);
 
 #endif	  //__APP_DATA_H__
