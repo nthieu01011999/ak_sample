@@ -81,6 +81,4 @@ private:
 #define MESSAGE_TYPE_RECORD			"RecordSetting"
 
 
-extern int mtce_configGetRtcServers(rtcServersConfig_t *rtcServerCfg);
-
 #endif	  //__APP_CONFIG_H__
