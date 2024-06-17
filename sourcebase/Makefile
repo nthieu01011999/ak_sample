@@ -212,7 +212,7 @@ copy: $(OBJ_DIR)/$(NAME_MODULE)
 # sudo cp $(OBJ_DIR)/$(NAME_MODULE) /mnt/hgfs/shareFd/	
 # sudo cp $(OBJ_DIR)/$(NAME_MODULE) /opt/nfs/nfs-fcl01/vivo/
 
-	sudo cp $(OBJ_DIR)/$(NAME_MODULE) /mnt/nfs_share/
+	sudo cp $(OBJ_DIR)/$(NAME_MODULE) /home/it/Desktop/ak_sample/sourcebase
 # sudo cp $(OBJ_DIR)/$(NAME_MODULE) /home/huy/Workspace/FPT/Github/Camera/nfs_vvtk
 # sudo cp $(OBJ_DIR)/$(NAME_MODULE) /mnt/hgfs/shareFd/
 # sudo cp $(OBJ_DIR)/$(NAME_MODULE) /home/trongtq6/ipcam/share/nfs	
